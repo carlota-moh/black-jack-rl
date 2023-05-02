@@ -449,7 +449,7 @@ class PolicyGradientAgent(Agent):
         return model
 
 
-    def _play_one_step(self, obs) -> tuple[np.array, float, bool, list]:
+    def _play_one_step(self, obs: np.array) -> tuple[np.array, float, bool, list]:
         """
         Play one step.
 
@@ -482,10 +482,11 @@ class PolicyGradientAgent(Agent):
         grads = tape.gradient(loss, self.model.trainable_variables)
         # Take action, the environment changes
         obs, reward, done, info, _ = self.env.step(int(action[0, 0].numpy()))
+        
         return obs, reward, done, grads
 
 
-    def _play_multiple_episodes(self, n_episodes, n_max_steps=100) -> tuple[list, list, list]:
+    def _play_multiple_episodes(self, n_episodes: int, n_max_steps: int = 100) -> tuple[list, list, list]:
         """
         Play multiple episodes.
 
@@ -534,10 +535,11 @@ class PolicyGradientAgent(Agent):
             # Append current rewards and gradients to the global lists
             all_rewards.append(current_rewards)
             all_grads.append(current_grads)
+
         return all_rewards, all_grads, final_rewards
 
 
-    def _discount_rewards(self, rewards) -> np.array:
+    def _discount_rewards(self, rewards: list) -> np.array:
         """
         Discount rewards.
 
@@ -554,10 +556,11 @@ class PolicyGradientAgent(Agent):
         discounted = np.array(rewards)
         for step in range(len(rewards) - 2, -1, -1):
             discounted[step] += discounted[step + 1] * self.gamma
+
         return discounted
 
 
-    def _discount_and_normalize_rewards(self, all_rewards) -> list:
+    def _discount_and_normalize_rewards(self, all_rewards: list) -> list:
         """
         Discount and normalize rewards.
 
@@ -582,4 +585,5 @@ class PolicyGradientAgent(Agent):
             (discounted_rewards - reward_mean) / reward_std 
             for discounted_rewards in all_discounted_rewards
             ]
+        
         return discounted_normalized_rewards
