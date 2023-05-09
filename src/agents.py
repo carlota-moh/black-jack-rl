@@ -12,6 +12,8 @@ from abc import abstractclassmethod
 from tqdm import tqdm
 from collections import deque
 from matplotlib_inline.backend_inline import set_matplotlib_formats
+from typing import Tuple, List  
+from gymnasium import Env
 
 # Show all figures in svg format
 set_matplotlib_formats('svg')
@@ -29,29 +31,77 @@ class Agent:
     @abstractclassmethod
     def act(self):
         """ Defines how the agent takes actions """
-        pass
+        
+
     @abstractclassmethod
     def evaluate(self):
         """ Defines how the agent is to be evaluated"""
-    
-    def plot_performance(self, rewards):
-        plt.figure(figsize=(8, 4))
-        plt.plot(rewards)
-        plt.xlabel("Episode", fontsize=14)
-        plt.ylabel("Sum of rewards", fontsize=14)
-        plt.show()
 
-    def plot_wins(self, rewards):
-        reward_counts = [rewards.count(i) for i in [-100, 0.5, 1]]
-        plt.figure(figsize=(8, 4))
-        plt.bar(x=["lose", 'draw', 'win'], height=reward_counts)
-        plt.xlabel("Episode", fontsize=14)
-        plt.ylabel("Sum of rewards", fontsize=14)
-        plt.show()
+    def plot_performance(
+            self, 
+            rewards: List, 
+            title: str = "Frequency of wins, draws and loses", 
+            xticks: List = ["Loses", "Draws", "Wins"],
+            color: List = ["royalblue"], 
+            figsize: Tuple = (16, 9), 
+            fontfamily: str = "serif", 
+            fontweight: str = "bold"
+            ) -> None:
+        """
+        Plot performance of agent. It is a barplot with the frequency of wins, draws and loses.
 
+        Args:
+        -------
+        rewards: list
+            Rewards obtained by agent.
+        title: str
+            Title of plot. Default: "Frequency of wins, draws and loses".
+        xticks: list
+            X-axis ticks. Default: ["Loses", "Draws", "Wins"].
+        color: list
+            Color of bars. Default: ["royalblue"].
+        figsize: tuple
+            Figure size. Default: (16, 9).
+        fontfamily: str
+            Font family. Default: "serif".
+        fontweight: str
+            Font weight. Default: "bold".
+        
+        Returns:
+        --------
+        None
+        """
+        # Create dictionary with the number of times each reward was obtained
+        unique, counts = np.unique(rewards, return_counts=True)
+        stats = dict(zip(xticks, counts/len(rewards)))
+
+        # Create figure and axes
+        fig, (ax) = plt.subplots(1, 1, figsize=figsize)
+
+        # Plot barplot with the number of times each reward was obtained
+        ax.bar(stats.keys(), counts/len(rewards), color=color, edgecolor="black")
+
+        # X-axis and Y-axis labels
+        # i) X-axis
+        plt.setp(ax.get_xticklines(), visible=False)
+        plt.xticks(list(stats.keys()), fontsize=15, fontweight=fontweight, fontfamily=fontfamily)
+        # ii) Y-axis
+        plt.setp(ax.get_yticklabels(), visible=False)
+        plt.setp(ax.get_yticklines(), visible=False)
+
+        # Add title
+        plt.title(title, fontsize=25, fontweight=fontweight, fontfamily=fontfamily)
+
+        # Add text to each bar
+        for key, value in stats.items():
+            ax.text(key, value/2, f"{np.round(100*value, 1)}%", ha="center", color="#FFFFFF", fontsize=15, fontweight=fontweight, fontfamily=fontfamily)
+
+        # Remove box from plot
+        sns.despine(top=True, right=True, left=True, bottom=False)
+        plt.show()
 
 class RandomAgent(Agent):
-    def __init__(self, env) -> None:
+    def __init__(self, env: Env) -> None:
         super().__init__(env)
         self.eval_rewards = []
 
@@ -59,7 +109,7 @@ class RandomAgent(Agent):
         action = self.env.action_space.sample()
         return action
 
-    def evaluate(self, n_episodes=1000):
+    def evaluate(self, n_episodes: int = 1000):
         for episode in tqdm(range(n_episodes)):
             obs = self.env.reset()[0]
             done = False
@@ -78,7 +128,13 @@ class RandomAgent(Agent):
         return self.eval_rewards
         
 class DQNAgent(Agent):
-    def __init__(self, env, num_states, num_actions, batch_size=200, gamma=0.8) -> None:
+    def __init__(self,
+                 env: Env,
+                 num_states: int = 3,
+                 num_actions: int = 2,
+                 batch_size: int = 200,
+                 gamma: float = 0.8) -> None:
+        
         super().__init__(env)
         np.random.seed(42)
         tf.random.set_seed(42)
@@ -103,7 +159,7 @@ class DQNAgent(Agent):
         
         return model
        
-    def act(self, state, epsilon):
+    def act(self, state: Tuple, epsilon: float):
         if np.random.rand() < epsilon:
             return self.env.action_space.sample()
         else:
@@ -118,7 +174,7 @@ class DQNAgent(Agent):
             for field_index in range(5)]
         return states, actions, rewards, next_states, dones
     
-    def play_one_step(self, state, epsilon):
+    def play_one_step(self, state: Tuple, epsilon: float):
         action = self.act(state, epsilon)
         next_state, reward, done, info, _ = self.env.step(action)
         self.replay_memory.append((state, action, reward, next_state, done))
@@ -139,7 +195,7 @@ class DQNAgent(Agent):
         grads = tape.gradient(loss, self.model.trainable_variables)
         self.optimizer.apply_gradients(zip(grads, self.model.trainable_variables))
 
-    def train(self, n_episodes=1000):
+    def train(self, n_episodes: int = 1000):
         for episode in tqdm(range(n_episodes)):
             epsilon = max(1 - episode / 500, 0.01)
             obs, _ = self.env.reset()
@@ -161,7 +217,7 @@ class DQNAgent(Agent):
 
         return self.train_rewards
     
-    def evaluate(self, n_episodes=1000):
+    def evaluate(self, n_episodes: int = 1000):
         for episode in tqdm(range(n_episodes)):
             obs = self.env.reset()[0]
             done = False
@@ -210,7 +266,12 @@ class PolicyGradientAgent(Agent):
     >>> historic_rewards, mean_rewards = agent.train(n_iterations=100, n_episodes_per_update=32, n_max_steps=100)
     """
 
-    def __init__(self, env, num_states: int, num_actions: int, gamma: float = 0.8, seed: int = 13) -> None:
+    def __init__(self, 
+                 env: Env,
+                 num_states: int = 3,
+                 num_actions: int = 2, 
+                 gamma: float = 0.8, 
+                 seed: int = 13) -> None:
         """
         Initialize agent.
 
@@ -254,7 +315,7 @@ class PolicyGradientAgent(Agent):
         self.mean_rewards = []
 
 
-    def train(self, n_iterations: int, n_episodes_per_update: int, n_max_steps: int = 100) -> tuple[list, list]:
+    def train(self, n_iterations: int, n_episodes_per_update: int, n_max_steps: int = 100) -> Tuple[List, List]:
         """
         Train agent.
 
@@ -305,7 +366,7 @@ class PolicyGradientAgent(Agent):
         return self.historic_rewards, self.mean_rewards
 
 
-    def evaluate(self, n_episodes: int, n_max_steps: int = 100) -> list:
+    def evaluate(self, n_episodes: int, n_max_steps: int = 100) -> List:
         """
         Evaluate agent once it has been trained.
 
@@ -342,10 +403,10 @@ class PolicyGradientAgent(Agent):
 
     def plot_performance(
             self, 
-            rewards: list, 
+            rewards: List, 
             title: str = "Frequency of wins, draws and loses", 
-            xticks: list = ["Loses", "Draws", "Wins"],
-            color: list = ["royalblue"], 
+            xticks: List = ["Loses", "Draws", "Wins"],
+            color: List = ["royalblue"], 
             figsize: tuple = (16, 9), 
             fontfamily: str = "serif", 
             fontweight: str = "bold"
@@ -449,7 +510,7 @@ class PolicyGradientAgent(Agent):
         return model
 
 
-    def _play_one_step(self, obs: np.array) -> tuple[np.array, float, bool, list]:
+    def _play_one_step(self, obs: np.array) -> Tuple[np.array, float, bool, List]:
         """
         Play one step.
 
@@ -486,7 +547,7 @@ class PolicyGradientAgent(Agent):
         return obs, reward, done, grads
 
 
-    def _play_multiple_episodes(self, n_episodes: int, n_max_steps: int = 100) -> tuple[list, list, list]:
+    def _play_multiple_episodes(self, n_episodes: int, n_max_steps: int = 100) -> Tuple[List, List, List]:
         """
         Play multiple episodes.
 
@@ -539,7 +600,7 @@ class PolicyGradientAgent(Agent):
         return all_rewards, all_grads, final_rewards
 
 
-    def _discount_rewards(self, rewards: list) -> np.array:
+    def _discount_rewards(self, rewards: List) -> np.array:
         """
         Discount rewards.
 
@@ -560,7 +621,7 @@ class PolicyGradientAgent(Agent):
         return discounted
 
 
-    def _discount_and_normalize_rewards(self, all_rewards: list) -> list:
+    def _discount_and_normalize_rewards(self, all_rewards: List) -> List:
         """
         Discount and normalize rewards.
 
