@@ -21,7 +21,9 @@ from gymnasium import Env
 
 # Show all figures in svg format
 set_matplotlib_formats('svg')
-
+import matplotlib as mpl
+import matplotlib.pyplot as plt
+import matplotlib.animation as animation
 mpl.rc('axes', labelsize=14)
 mpl.rc('xtick', labelsize=12)
 mpl.rc('ytick', labelsize=12)
@@ -317,6 +319,7 @@ class DQNAgent(Agent):
         self.replay_memory = deque(maxlen=2000)
         self.train_rewards = []
         self.eval_rewards = []
+        self.frames = []
         self.optimizer = tf.keras.optimizers.Adam(learning_rate=1e-2)
         self.loss_fn = tf.keras.losses.mean_squared_error
         self.model = self.create_model()
@@ -389,13 +392,17 @@ class DQNAgent(Agent):
 
         return self.train_rewards
     
-    def evaluate(self, n_episodes: int = 1000):
+    def evaluate(self, n_episodes: int = 1000, save_images: bool = False):
         for episode in tqdm(range(n_episodes)):
             obs = self.env.reset()[0]
             done = False
             while not done:
                 action = self.act(obs, epsilon=0)
                 obs, reward, done, info, _ = self.env.step(action)
+                
+                if save_images:
+                    img = self.env.render()
+                    self.frames.append(img)
 
             if reward == 0:
                 reward += 0.5
@@ -409,6 +416,97 @@ class DQNAgent(Agent):
     
     def save(self, path):
         self.model.save(path)
+    
+    def plot_environment(self, figsize=(5,4)):
+        """
+        Given a gym environment, plot the environment
+
+        Parameters
+        ----------
+        env : gym environment
+            The environment to plot
+        figsize : tuple, optional
+            The size of the figure to plot, by default (5,4)
+        
+        Returns
+        -------
+        None
+            The plot is shown
+        """
+        plt.figure(figsize=figsize)
+        img = self.env.render()
+        plt.imshow(img)
+        plt.axis("off")
+        plt.show()
+        return
+
+    def update_scene(self, num, frames, patch):
+        """
+        Update the scene for the animation
+
+        Parameters
+        ----------
+        num : int
+            The current frame number
+        frames : list
+            The list of frames to plot
+        patch : matplotlib patch
+            The patch to update
+
+        Returns
+        -------
+        matplotlib patch
+            The updated patch
+        """
+        patch.set_data(frames[num])
+        return patch
+
+    def plot_animation(self, repeat=False, interval=20):
+        """
+        Plot an animation of the frames
+
+        Parameters
+        ----------
+        repeat : bool, optional
+            Whether to repeat the animation, by default False
+        interval : int, optional
+            The interval between frames, by default 20
+        
+        Returns
+        -------
+        matplotlib animation
+            The animation
+        """
+        fig = plt.figure()
+        patch = plt.imshow(self.frames[0])
+        plt.axis('off')
+        # Call the animator
+        anim = animation.FuncAnimation(
+            fig, self.update_scene, fargs=(self.frames, patch),
+            frames=len(self.frames), repeat=repeat, interval=interval, cache_frame_data=False
+        )
+        plt.close()
+        return anim
+
+    def save_gif(self, path, anim, fps):
+        """
+        Save the animation as a gif
+
+        Parameters
+        ----------
+        path : str
+            The path to save the gif
+        anim : matplotlib animation
+            The animation to save
+
+        Returns
+        -------
+        None
+            The gif is saved
+        """
+        writergif = animation.PillowWriter(fps=fps) 
+        anim.save(path, writer=writergif)
+        return
 
 
 class PolicyGradientAgent(Agent):
