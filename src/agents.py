@@ -14,6 +14,8 @@ from collections import deque
 from matplotlib_inline.backend_inline import set_matplotlib_formats
 from typing import Tuple, List  
 from gymnasium import Env
+from collections import defaultdict
+import random
 
 # Show all figures in svg format
 set_matplotlib_formats('svg')
@@ -129,144 +131,94 @@ class RandomAgent(Agent):
         
         return self.eval_rewards
     
-class QAgent():
-    """
-    Defines an agent that can be used to solve the Frozen Lake environment
-    """
-    def __init__(self,
-                 env: Env,
-                 num_states: int = 3,
-                 num_actions: int = 2,
-                 gamma: float = 0.8) -> None:
-        """
-        Initialize the agent
 
-        Parameters
-        ----------
-        env : gym environment
-            The environment to solve
-        holes : list, optional
-            The list of holes in the environment, by default None
-        frozen : list, optional
-            The list of frozen tiles in the environment, by default None
-        
-        Returns
-        -------
-        None
-            The agent is initialized
-        """
-        # Initialize the environment, num_states and num_actions
-        self.env = env
-        self.num_states = num_states
-        self.num_actions = num_actions
-        # Initialize the Q-table
-        self.q_table = np.zeros(
-            [self.num_states,
-            self.num_actions]
-        )
-        # Initialize the list of holes, frozen tiles, rewards and wins
-        self.gamma = gamma
-        self.train_rewards = []
-        self.eval_rewards = []
 
-    def act(self, state: Tuple, epsilon: float):
-        if np.random.rand() < epsilon:
-            return self.env.action_space.sample()
-        else:
-            return np.argmax(self.q_table[state])
-
-    def train(self, alpha, gamma, epsilon, episodes=1000, modify_rewards=False):
-        """
-        Train the agent using the Q-learning algorithm
-
-        Parameters
-        ----------
-        alpha : float
-            The learning rate
-        gamma : float
-            The discount factor
-        epsilon : float
-            The exploration rate
-        episodes : int, optional
-            The number of episodes to train for, by default 1000
-        modify_rewards : bool, optional
-            Whether to modify the rewards, by default False
-
-        Returns
-        -------
-        None
-            The agent is trained
-        """
-        # For each episode
-        for i in tqdm(range(episodes)):
-            epsilon = max(1 - i / 500, 0.01)
-            state = self.env.reset()[0]
-            done = False
-            
-            # While the episode is not done
-            while not done:
-                action = self.act() # Exploit learned values
-
-                next_state, reward, done, _, _ = self.env.step(action)
-
-                # Modify the rewards
-                if reward == 0:
-                    reward += 0.5
-
-                elif reward == -1:
-                    reward = -100
-                
-                self.train_rewards.append(reward)
-                
-                # Update the Q-table
-                old_value = self.q_table[state, action]
-                next_max = np.max(self.q_table[next_state])
-                new_value = (1 - alpha) * old_value + alpha * (reward + gamma * next_max)
-                self.q_table[state, action] = new_value
-
-                # Update the state
-                state = next_state
-                
-                # Save the images
-                self.env.render()
-
-            return self.train_rewards
     
-    def evaluate(self,
-                 n_episodes: int = 100):
-        """
-        Evaluate the performance of the agent
+# Clase para el agente de Q-learning
+class QAgent(Agent):
+    def __init__(self, env:Env, learning_rate, discount_factor, exploration_rate):
+        super().__init__(env)
+        self.env=env
+        self.learning_rate = learning_rate
+        self.discount_factor = discount_factor
+        self.exploration_rate = exploration_rate
+        self.Q = defaultdict(lambda: np.random.uniform(low=-0.001, high=0.001, size=(2,)))
+        self.is_trained=False
+        self.train_rewards=[]
+        self.eval_rewards=[]
 
-        Parameters
-        ----------
-        episodes : int, optional
-            The number of episodes to evaluate for, by default 100
-        save_images : bool, optional
-            Whether to save the images, by default False
-        
-        Returns
-        -------
-        total_epochs : int
-            The total number of epochs
-        total_penalties : int
-            The total number of penalties
-        """
-        for episode in tqdm(range(n_episodes)):
-            obs = self.env.reset()[0]
+    def get_action(self, state):
+        # Elegir una acción epsilon-greedy
+        if random.uniform(0, 1) < self.exploration_rate:
+            # Acción aleatoria
+            action = random.randint(0, 1)
+        else:
+            # Acción greedy
+            action = np.argmax(self.Q[state])
+
+        return action
+
+    def update_q(self, state, action, reward, next_state):
+        # Actualizar la matriz Q
+        old_value = self.Q[state][action]
+        next_max = np.max(self.Q[next_state])
+        new_value = (1 - self.learning_rate) * old_value + self.learning_rate * (reward + self.discount_factor * next_max)
+        self.Q[state][action] = new_value
+    # Entrenar al agente
+    def train(self, episodes):
+        # Loop de entrenamiento
+        for episode in range(episodes):
+            state = self.env.reset()
             done = False
             while not done:
-                action = self.act()
-                obs, reward, done, info, _ = self.env.step(action)
+                # Elegir una acción y tomarla
+                action = self.get_action(state)
+                next_state, reward, done, info = self.env.step(action)
 
-            if reward == 0:
-                reward += 0.5
-            
-            elif reward == -1:
-                reward = -100
-                
-            self.eval_rewards.append(reward)
+                # Actualizar la matriz Q
+                self.update_q(state, action, reward, next_state)
+
+                # Actualizar el estado actual
+                state = next_state
+
+            self.train_rewards.append(reward)
+        self.is_trained=True
+
         
-        return self.eval_rewards
+
+    def evaluate(self, episodes):
+        assert self.is_trained is True, "You need to train the agent before evaluating it!"
+    # Contadores de victorias, derrotas y empates
+        wins = 0
+        losses = 0
+        draws = 0
+
+        # Loop de juego
+        for episode in range(episodes):
+            state = self.env.reset()
+            done = False
+            while not done:
+                # Elegir una acción greedy
+                action = np.argmax(self.Q[state])
+
+                # Tomar la acción y obtener la información del entorno
+                next_state, reward, done, info = self.env.step(action)
+
+                # Actualizar el estado actual
+                state = next_state
+
+            # Actualizar los contadores de victorias, derrotas y empates
+            if reward > 0:
+                wins += 1
+            elif reward < 0:
+                losses += 1
+            else:
+                draws += 1
+            self.eval_rewards.append(reward)
+            
+        print("Wins: ", (wins/episodes)*100, ' %')
+        print("Looses: ", (losses/episodes)*100, ' %')
+        print("Draws: ", (draws/episodes)*100, ' %')
 
     def plot_q_training_curve(self, window=10):
         """
