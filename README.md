@@ -17,6 +17,7 @@ Blackjack is a card game where the goal is to beat the dealer by obtaining cards
 We will be comparing the performance of multiple Reinforcement Learning techniques, including:
 + DQN:
 + Policies:
++ QLearning:
 
 We will compare the performance of these algorithms by measuring the win rate achieved by each agent after a fixed number of episodes of training.
 
