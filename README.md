@@ -10,10 +10,11 @@ Our team of contributors includes:
 |Name                    |Email                              |
 |------------------------|-----------------------------------|
 |Jorge Ayuso Martínez    |jorgeayusomartinez@alu.comillas.edu|
-|Javier Gisbert          |202208977@alu.comillas.edu         |
+|Javier Gisbert Gil      |202208977@alu.comillas.edu         |
 |Carlota Monedero Herranz|carlotamoh@alu.comillas.edu        |
 |Diego Sanz-Gadea        |d.sanz-gadea@alu.icai.comillas.edu |
 |José Manuel Vega Gradit |josemanuel.vega@alu.comillas.edu   |
+
 
 Blackjack is a classic card game where the objective is to get a higher card value than the dealer, without exceeding 21. At the start of each round, the dealer deals two cards to the player, both of which are face-up, and two cards to themselves, one of which is face-down. The player can then choose to "Hit," receiving an additional card, or "Stand," keeping their current hand value. If the player's hand value exceeds 21, they "Bust" and automatically lose the game. The game ends when either the player or the dealer gets a hand value of 21 or as close to it as possible without exceeding it. 
 
