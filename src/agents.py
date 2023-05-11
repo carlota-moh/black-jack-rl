@@ -7,6 +7,10 @@ import seaborn as sns
 # Machine learning libraries
 import numpy as np
 import tensorflow as tf
+from tensorflow.keras.layers import (
+    Input, 
+    Dense
+)
 
 from abc import abstractclassmethod
 from tqdm import tqdm
@@ -866,3 +870,278 @@ class PolicyGradientAgent(Agent):
             ]
         
         return discounted_normalized_rewards
+    
+class A2CAgent(Agent):
+    """
+    Actor-Critic agent.
+
+    Args:
+    -------
+    env: gym.Env
+        Gym environment.
+    num_states: int
+        Number of states.
+    num_actions: int
+        Number of actions.
+    gamma: float
+        Discount factor. Default: 0.8.
+    seed: int
+        Seed for random number generator. Default: 13.
+
+    Examples:
+    ---------
+    >>> from src.agents import A2CAgent
+    >>> import gym
+    >>> env = gym.make('Blackjack-v1', natural=False, sab=False, render_mode='rgb_array')
+    >>> env.reset()
+    >>> agent = A2CAgent(num_states=3, num_actions=2, env=env)
+    >>> historic_rewards, mean_rewards = agent.train(n_iterations=100, n_episodes_per_update=32, n_max_steps=100)
+    """
+
+    def __init__(self, 
+        env: Env,
+        num_states: int = 3,
+        num_actions: int = 2, 
+        gamma: float = 0.8, 
+        seed: int = 42
+    ) -> None:
+        """
+        Initialize agent.
+
+        Args:
+        -------
+        env: gym.Env
+            Gym environment.
+        num_states: int
+            Number of states.
+        num_actions: int
+            Number of actions.
+        gamma: float
+            Discount factor. Default: 0.8.
+        seed: int
+            Seed for random number generator. Default: 13.
+
+        Returns:
+        --------
+        None
+        """
+        # Call parent constructor
+        super().__init__(env)
+        # Set seed
+        np.random.seed(seed)
+        tf.random.set_seed(seed)
+        # Adam optimizer
+        self.optimizer = tf.keras.optimizers.Adam(learning_rate=0.01)
+        # Loss function - Binary crossentropy
+        self.loss_fn = tf.keras.losses.binary_crossentropy
+        # Number of states and actions
+        self.num_states = num_states
+        self.num_actions = num_actions
+        # Discount factor
+        self.gamma = gamma
+        # Build model
+        self.model = self._build_model()
+        # Initialize lists to store rewards
+        self.train_rewards = []
+        self.eval_rewards = []
+
+    def _build_model(self) -> tf.keras.models.Sequential:
+        """
+        Build model.
+
+        Args:
+        -------
+        None
+
+        Returns:
+        --------
+        model: tf.keras.models.Sequential
+            Actor-critic model.
+        """
+        # Define input layer
+        inputs = Input(shape=(self.num_states,))
+
+        # Define shared hidden layers
+        hidden1 = Dense(32, activation='relu')(inputs)
+        hidden2 = Dense(32, activation='relu')(hidden1)
+
+        # Define separate output layers
+        output1 = Dense(self.num_actions)(hidden2)
+        output2 = Dense(self.num_actions, activation='softmax')(hidden2)
+
+        model = tf.keras.Model(inputs=inputs, outputs=[output2, output1])
+        return model
+
+    def _play_one_step(self, state):
+        """
+        Play one step.
+
+        Args:
+        -------
+        obs: np.array
+            Current state.
+
+        Returns:
+        --------
+        """
+        # Get the action probabilities from the policy network
+        action_probs, _ = self.model.predict(np.array([state]),verbose=0)
+        # Choose an action based on the action probabilities
+        action = np.random.choice(self.num_actions, p=action_probs[0])
+        # Take the chosen action and observe the next state and reward
+        next_state, reward, done, info, _ = self.env.step(action)
+        # Convert next state to list
+        next_state = list(next_state)
+        return next_state, reward, done, info, action
+
+    def train(self, n_episodes: int, n_max_steps: int = 10):
+        """
+        Train agent.
+
+        Args:
+        -------
+        n_episodes: int
+            Number of episodes.
+        n_max_steps: int
+            Maximum number of steps per episode. Default: 10.
+
+        Returns:
+        --------
+        self.train_rewards: list
+            Rewards for the training process
+        """
+        states = deque(maxlen=n_max_steps)
+        actions = deque(maxlen=n_max_steps)
+        rewards = deque(maxlen=n_max_steps)
+        next_states = deque(maxlen=n_max_steps)
+        dones = deque(maxlen=n_max_steps)
+        
+        # Loop over iterations
+        for episode in range(n_episodes):
+            # Reset environment
+            state = list(self.env.reset()[0])
+            # Iterate over steps within one episode
+            for step in range(n_max_steps):
+                # Play one step
+                next_state, reward, done, info, action = self._play_one_step(state)
+                # Store the current state, action, and reward
+                states.append(state)
+                actions.append(action)
+                rewards.append(reward)
+                next_states.append(next_state)
+                dones.append(1 if done else 0)
+                state = next_state
+                # End the episode if the environment is done
+                if done:
+                    done=False
+                    break
+            
+            # Update the model's weights
+            self._training_step(states, actions, rewards, next_states, dones)
+
+        # Save the train rewards after converting the deque to list
+        self.train_rewards = list(rewards)
+        return self.train_rewards
+
+    def _training_step(self, states: deque, actions: deque, rewards: deque, next_states: deque, dones) -> None:
+        """
+        Perform one training step.
+
+        Parameters:
+        -----------
+        states: deque
+            Deque of states.
+        actions: deque
+            Deque of actions.
+        rewards: deque
+            Deque of rewards.
+        next_states: deque
+            Deque of next states.
+        dones: deque
+            Deque of done flags.
+
+        Returns:
+        --------
+        None
+            The model is updated in place.
+        """
+        # Convert the lists of states, actions, and discounted rewards to tensors
+        states_ = tf.convert_to_tensor(states)
+        actions_ = tf.convert_to_tensor(actions)
+        rewards_ = tf.convert_to_tensor(rewards)
+        next_states_ = tf.convert_to_tensor(next_states)
+        
+        with tf.GradientTape(persistent=True) as tape:
+            # Compute the discounted rewards
+            action_probs,q_values1 = self.model(states_)
+            q_value1 = tf.cast(tf.gather(q_values1,actions_,axis=1,batch_dims=1),tf.float64)
+            _,q_value2 = self.model(next_states_)
+            q_value2 = tf.cast(tf.reduce_max(q_value2),tf.float64)
+            # Compute the action probabilities
+            target_value = tf.cast(rewards_,tf.float64) + (tf.cast(1,tf.float64)-tf.cast(dones,tf.float64))*self.gamma*q_value2
+            value_loss = tf.reduce_mean(tf.math.pow(target_value-q_value1,2))
+            advantage = target_value-q_value1
+            action_probs = tf.cast(tf.math.log(tf.gather(action_probs,actions,axis=1,batch_dims=1)),tf.float64)
+            # Compute the loss
+            loss = -tf.reduce_mean(action_probs * advantage) + value_loss
+
+        # Compute the gradients
+        grads = tape.gradient(loss, self.model.trainable_variables)
+        # Apply gradients
+        self.optimizer.apply_gradients(zip(grads, self.model.trainable_variables))
+        return
+
+    def evaluate(self, n_episodes: int, n_max_steps: int = 10) -> List:
+        """
+        Evaluate agent once it has been trained.
+
+        Args:
+        -------
+        n_episodes: int
+            Number of episodes.
+        n_max_steps: int
+            Maximum number of steps per episode. Default: 10.
+
+        Returns:
+        --------
+        final_rewards: list
+            Final rewards (i.e., rewards for each episode, +1 if win, -1 if lose, 0 if draw).
+        """
+        # List where to store all final rewards obtained (one per episode, +1 if win, -1 if lose, 0 if draw)
+        final_rewards = []
+
+        # Iterate over episodes
+        for episode in range(n_episodes):
+            # Reset environment
+            obs = self.env.reset()[0]
+            # Iterate over steps within the episode
+            for step in range(n_max_steps):
+                # Play one step and get next state, reward, if episode is done and gradients
+                obs, reward, done, grads, _ = self._play_one_step(obs)
+                # If episode is done, append final reward and break inner loop
+                if done:
+                    final_rewards.append(reward)
+                    break
+        
+        return final_rewards
+
+    def save(self, model_dir: str, model_name: str) -> None:
+        """
+        Save model.
+
+        Args:
+        -------
+        model_dir: str
+            Directory where to save model.
+        model_name: str
+            Name of model in .h5 format.
+            
+        Returns:
+        --------
+        None
+        """
+        # Create directory where to save model, if it does not exist
+        os.makedirs(model_dir, exist_ok=True)
+        # Save model
+        model_path = os.path.join(model_dir, model_name)
+        self.model.save(model_path)
