@@ -9,6 +9,8 @@ Our team of contributors includes:
 |Jorge Ayuso Martínez    |jorgeayusomartinez@alu.comillas.edu|
 |Carlota Monedero Herranz|carlotamoh@alu.comillas.edu        |
 |José Manuel Vega Gradit |josemanuel.vega@alu.comillas.edu   |
+|Diego Sanz-Gadea Sánchez|dsanzgadea@alu.comillas.edu        |
+|Javier Gisbert Gíl      |202208977@alu.comillas.edu         |
 
 Blackjack is a card game where the goal is to beat the dealer by obtaining cards that sum to closer to 21 than the dealers cards (without going over 21). The game starts with the dealer having one face up and one face down card, while the player is dealt two cards facing up. The player can either "Hit" to receive another card or "Stand" (also known as "Stick") to keep their current hand value. The game ends when either the player or the dealer has a hand value greater than 21, or both have "stood" and their hands are compared.
 
