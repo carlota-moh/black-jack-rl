@@ -31,7 +31,7 @@ We'll be comparing the performance of multiple Reinforcement Learning techniques
 
 To evaluate the effectiveness of the reinforcement learning techniques we're implementing, we'll measure the win rate of each agent after a fixed number of training episodes.
 
-We've created a video showcasing the gameplay of our best-performing agent, which was trained using DQN. You can find this video in the `docs/imgs/results_video.gif` directory and watch it to see how the agent plays against the dealer. We've also included an extract of the video below for your convenience:
+We've created a video showcasing the results of the applied algorithms. You may find the video in the `docs/imgs/results_video.gif` directory and watch it to see how our agents play against the dealer. We've also included an extract of the video below for your convenience:
 
 ![results_gif](./docs/imgs/results_video.gif)
 
