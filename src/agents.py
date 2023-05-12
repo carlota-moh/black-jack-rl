@@ -54,7 +54,7 @@ class Agent:
             figsize: Tuple = (16, 9), 
             fontfamily: str = "serif", 
             fontweight: str = "bold"
-            ) -> None:
+        ) -> None:
         """
         Plot performance of agent. It is a barplot with the frequency of wins, draws and loses.
 
@@ -107,6 +107,7 @@ class Agent:
         # Remove box from plot
         sns.despine(top=True, right=True, left=True, bottom=False)
         plt.show()
+        return
 
 class RandomAgent(Agent):
     def __init__(self, env: Env) -> None:
@@ -135,10 +136,7 @@ class RandomAgent(Agent):
         
         return self.eval_rewards
     
-
-
     
-# Clase para el agente de Q-learning
 class QAgent(Agent):
     def __init__(self, env:Env, learning_rate, discount_factor, exploration_rate):
         super().__init__(env)
@@ -192,7 +190,7 @@ class QAgent(Agent):
 
     def evaluate(self, episodes):
         assert self.is_trained is True, "You need to train the agent before evaluating it!"
-    # Contadores de victorias, derrotas y empates
+        # Contadores de victorias, derrotas y empates
         wins = 0
         losses = 0
         draws = 0
@@ -254,13 +252,35 @@ class QAgent(Agent):
         return
         
 class DQNAgent(Agent):
-    def __init__(self,
-                 env: Env,
-                 num_states: int = 3,
-                 num_actions: int = 2,
-                 batch_size: int = 200,
-                 gamma: float = 0.8) -> None:
+    def __init__(
+        self,
+        env: Env,
+        num_states: int = 3,
+        num_actions: int = 2,
+        batch_size: int = 200,
+        gamma: float = 0.8
+    ) -> None:
+        """
+        Initialize the agent
+
+        Parameters
+        ----------
+        env : Env
+            The environment
+        num_states : int, optional
+            The number of states, by default 3
+        num_actions : int, optional
+            The number of actions, by default 2
+        batch_size : int, optional
+            The batch size, by default 200
+        gamma : float, optional
+            The discount factor, by default 0.8
         
+        Returns
+        -------
+        None
+            The agent is initialized
+        """
         super().__init__(env)
         np.random.seed(42)
         tf.random.set_seed(42)
@@ -277,16 +297,39 @@ class DQNAgent(Agent):
         self.model = self.create_model()
     
     def create_model(self):
+        """
+        Create the model
+        
+        Returns
+        -------
+        tf.keras.models.Sequential
+            The model
+        """
         model = tf.keras.models.Sequential([
             tf.keras.layers.Dense(128, activation="elu", input_shape=(self.num_states,)),
             tf.keras.layers.Dense(64, activation="elu"),
             tf.keras.layers.Dense(32, activation="elu"),
             tf.keras.layers.Dense(self.num_actions)
-            ])
+        ])
         
         return model
        
     def act(self, state: Tuple, epsilon: float):
+        """
+        Performs an action
+
+        Parameters
+        ----------
+        state : Tuple
+            The state
+        epsilon : float
+            The epsilon
+        
+        Returns
+        -------
+        int
+            The action
+        """
         if np.random.rand() < epsilon:
             return self.env.action_space.sample()
         else:
@@ -294,6 +337,14 @@ class DQNAgent(Agent):
             return np.argmax(Q_values)
         
     def sample_experiences(self):
+        """
+        Sample experiences from the replay memory
+
+        Returns
+        -------
+        Tuple
+            The experiences
+        """
         indices = np.random.randint(len(self.replay_memory), size=self.batch_size)
         batch = [self.replay_memory[index] for index in indices]
         states, actions, rewards, next_states, dones = [
@@ -302,12 +353,41 @@ class DQNAgent(Agent):
         return states, actions, rewards, next_states, dones
     
     def play_one_step(self, state: Tuple, epsilon: float):
+        """
+        Play one step.
+
+        Parameters
+        ----------
+        state : Tuple
+            The state
+        epsilon : float
+            The epsilon
+        
+        Returns
+        -------
+        obs: np.array
+            Next state.
+        reward: float
+            Reward obtained.
+        done: bool
+            Whether the episode is done or not.
+        info: list
+            Gradients of the model.
+        """
         action = self.act(state, epsilon)
         next_state, reward, done, info, _ = self.env.step(action)
         self.replay_memory.append((state, action, reward, next_state, done))
         return next_state, reward, done, info
     
     def training_step(self):
+        """
+        Perform one training step.
+
+        Returns
+        -------
+        None
+            The model is updated in place.
+        """
         states, actions, rewards, next_states, dones = self.sample_experiences()
         next_Q_values = self.model.predict(next_states, verbose=0)
         max_next_Q_values = np.max(next_Q_values, axis=1)
@@ -323,6 +403,19 @@ class DQNAgent(Agent):
         self.optimizer.apply_gradients(zip(grads, self.model.trainable_variables))
 
     def train(self, n_episodes: int = 1000):
+        """
+        Train the agent
+
+        Parameters
+        ----------
+        n_episodes : int, optional
+            The number of episodes. 1000 by default
+
+        Returns
+        -------
+        list
+            The rewards
+        """
         for episode in tqdm(range(n_episodes)):
             epsilon = max(1 - episode / 500, 0.01)
             obs, _ = self.env.reset()
@@ -345,6 +438,21 @@ class DQNAgent(Agent):
         return self.train_rewards
     
     def evaluate(self, n_episodes: int = 1000, save_images: bool = False):
+        """
+        Evaluate the agent
+
+        Parameters
+        ----------
+        n_episodes : int, optional
+            The number of episodes. 1000 by default
+        save_images : bool, optional
+            Whether to save the images or not. False by default
+        
+        Returns
+        -------
+        list
+            The rewards
+        """
         for episode in tqdm(range(n_episodes)):
             obs = self.env.reset()[0]
             done = False
@@ -367,6 +475,14 @@ class DQNAgent(Agent):
         return self.eval_rewards
     
     def save(self, path):
+        """
+        Save the model
+
+        Parameters
+        ----------
+        path : str
+            The path to save the model
+        """
         self.model.save(path)
     
     def plot_environment(self, figsize=(5,4)):
@@ -621,70 +737,6 @@ class PolicyGradientAgent(Agent):
                     break
         
         return final_rewards
-
-
-    def plot_performance(
-            self, 
-            rewards: List, 
-            title: str = "Frequency of wins, draws and loses", 
-            xticks: List = ["Loses", "Draws", "Wins"],
-            color: List = ["royalblue"], 
-            figsize: tuple = (16, 9), 
-            fontfamily: str = "serif", 
-            fontweight: str = "bold"
-            ) -> None:
-        """
-        Plot performance of agent. It is a barplot with the frequency of wins, draws and loses.
-
-        Args:
-        -------
-        rewards: list
-            Rewards obtained by agent.
-        title: str
-            Title of plot. Default: "Frequency of wins, draws and loses".
-        xticks: list
-            X-axis ticks. Default: ["Loses", "Draws", "Wins"].
-        color: list
-            Color of bars. Default: ["royalblue"].
-        figsize: tuple
-            Figure size. Default: (16, 9).
-        fontfamily: str
-            Font family. Default: "serif".
-        fontweight: str
-            Font weight. Default: "bold".
-        
-        Returns:
-        --------
-        None
-        """
-        # Create dictionary with the number of times each reward was obtained
-        unique, counts = np.unique(rewards, return_counts=True)
-        stats = dict(zip(xticks, counts/len(rewards)))
-
-        # Create figure and axes
-        fig, (ax) = plt.subplots(1, 1, figsize=figsize)
-
-        # Plot barplot with the number of times each reward was obtained
-        ax.bar(stats.keys(), counts/len(rewards), color=color, edgecolor="black")
-
-        # X-axis and Y-axis labels
-        # i) X-axis
-        plt.setp(ax.get_xticklines(), visible=False)
-        plt.xticks(list(stats.keys()), fontsize=15, fontweight=fontweight, fontfamily=fontfamily)
-        # ii) Y-axis
-        plt.setp(ax.get_yticklabels(), visible=False)
-        plt.setp(ax.get_yticklines(), visible=False)
-
-        # Add title
-        plt.title(title, fontsize=25, fontweight=fontweight, fontfamily=fontfamily)
-
-        # Add text to each bar
-        for key, value in stats.items():
-            ax.text(key, value/2, f"{np.round(100*value, 1)}%", ha="center", color="#FFFFFF", fontsize=15, fontweight=fontweight, fontfamily=fontfamily)
-
-        # Remove box from plot
-        sns.despine(top=True, right=True, left=True, bottom=False)
-        plt.show()
 
 
     def save(self, model_dir: str, model_name: str) -> None:
@@ -983,6 +1035,16 @@ class A2CAgent(Agent):
 
         Returns:
         --------
+        next_state: np.array
+            Next state.
+        reward: float
+            Reward.
+        done: bool
+            Whether episode is done.
+        info: dict
+            Additional information.
+        action: int
+            Action.
         """
         # Get the action probabilities from the policy network
         action_probs, _ = self.model.predict(np.array([state]),verbose=0)
@@ -992,6 +1054,11 @@ class A2CAgent(Agent):
         next_state, reward, done, info, _ = self.env.step(action)
         # Convert next state to list
         next_state = list(next_state)
+        # Modify reward
+        if reward == 0:
+            reward = 0.5
+        elif reward == -1:
+            reward = -100
         return next_state, reward, done, info, action
 
     def train(self, n_episodes: int, n_max_steps: int = 10):
@@ -1015,6 +1082,7 @@ class A2CAgent(Agent):
         rewards = deque(maxlen=n_max_steps)
         next_states = deque(maxlen=n_max_steps)
         dones = deque(maxlen=n_max_steps)
+        total_rewards = []
         
         # Loop over iterations
         for episode in range(n_episodes):
@@ -1028,6 +1096,7 @@ class A2CAgent(Agent):
                 states.append(state)
                 actions.append(action)
                 rewards.append(reward)
+                total_rewards.append(reward)
                 next_states.append(next_state)
                 dones.append(1 if done else 0)
                 state = next_state
@@ -1040,7 +1109,7 @@ class A2CAgent(Agent):
             self._training_step(states, actions, rewards, next_states, dones)
 
         # Save the train rewards after converting the deque to list
-        self.train_rewards = list(rewards)
+        self.train_rewards = total_rewards
         return self.train_rewards
 
     def _training_step(self, states: deque, actions: deque, rewards: deque, next_states: deque, dones) -> None:
